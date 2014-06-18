@@ -1,0 +1,66 @@
+#! /bin/bash
+
+##  This script was hacked together from random crap found on the interwebs by NoTerminal.
+##  Most of the configuration work can be done between this information and the long string
+##  of hash marks.  You also will need to create a backup user in your mysql database.
+
+
+DIRECTORIES="/etc /var/www /var/log"     # directories to backup
+TAR=/bin/tar                    # name and locaction of tar
+DESTDIR=/root/backup		# path to backup files
+EXITSTAT=0			# initialize errorlevel variable (you shouldn't need to change this)
+LOCALSERVERNAME=anita		# the name of the server that this script is running ona
+MYSQLUSER=backup                # mysql user with permissions to dump the database
+MYSQLPWD=   			# password for mysql user
+EXCLUDEFILE=00_tarexclude	# the name of the file to put in a directory to exclude it and all sub directories
+
+##############################################################
+if test -d $DESTDIR
+then 
+##                       For two backup folders use this segment.
+##                       Note: drive must have space to store 2 backups at a time
+## ._____________________________________________________________________________________________.
+## |	                                                                                         |
+	if test -d $DESTDIR/$LOCALSERVERNAME.2.bak
+	then
+		rm -r $DESTDIR/$LOCALSERVERNAME.2.bak
+	fi
+	if test -d $DESTDIR/$LOCALSERVERNAME.1.bak
+	then	
+		mv $DESTDIR/$LOCALSERVERNAME.1.bak $DESTDIR/$LOCALSERVERNAME.2.bak
+	fi
+
+## |	                                                                                         |
+## ._____________________________________________________________________________________________.
+
+
+##                       For three backup folders use this segment.  
+## ._____________________________________________________________________________________________.
+## |	                                                                                         |
+#	if test -d $DESTDIR/$LOCALSERVERNAME.2.bak  #remove old files and keep newish ones
+#	then
+#		if test -d $DESTDIR/$LOCALSERVERNAME.3.bak
+#		then
+#			rm -r $DESTDIR/$LOCALSERVERNAME.3.bak
+#		fi
+#		mv $DESTDIR/$LOCALSERVERNAME.2.bak $DESTDIR/$LOCALSERVERNAME.3.bak
+#	fi
+#	mv $DESTDIR/$LOCALSERVERNAME.1.bak $DESTDIR/$LOCALSERVERNAME.2.bak
+## |	                                                                                         |
+## ._____________________________________________________________________________________________.
+
+	mkdir $DESTDIR/$LOCALSERVERNAME.1.bak
+	$TAR -cj --exclude-tag-under=$EXCLUDEFILE $DIRECTORIES >$DESTDIR/$LOCALSERVERNAME.1.bak/directory_struct.tar  #here's where the magic happens
+	EXITSTAT=`expr $EXITSTAT + $?`
+	/usr/sbin/dbbackup.pl $LOCALSERVERNAME $DESTDIR/$LOCALSERVERNAME.1.bak $MYSQLUSER $MYSQLPWD #Call perl script to backup databases
+	EXITSTAT=`expr $EXITSTAT + $?`
+else
+	EXITSTAT=`expr $EXITSTAT + 1` #throw an error because the directory test at the top of the code failed
+fi
+
+if [ $EXITSTAT = 0 ]  # if exit status ($?) is 0 (aka: success) then do this
+then
+	echo $LOCALSERVERNAME backup script completed successfully. Exit status $EXITSTAT |mail -s success alert@ecotrust.org
+else
+	echo $LOCALSERVERNAME backup script was unable to complete. Exit status $EXITSTAT |mail -s failure alert@ecotrust.org
+fi
